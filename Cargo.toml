@@ -1,0 +1,50 @@
+[package]
+name = "janus-client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+
+[workspace]
+members = [ 
+    "crates/janus-chrome",
+    "crates/janus-core",
+    # "crates/janus-interface",  // 将被整合到 janus-core
+    # "crates/janus-transport",  // 将被整合到 janus-core
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Async Runtime & Utilities
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
+async-trait = "0.1"
+
+# Actor Framework
+actix = "0.13"
+
+# Serialization/Deserialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Configuration
+config = "0.14"
+toml = "0.8"
+
+# Error Handling
+thiserror = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.11" # Or another logger implementation
+
+# Networking / WebSocket
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+url = "2.5"
+
+# Additional Dependencies
+bytes = "1.5"  # For BytesMut in connection codec
+
+# Add other common dependencies if needed
+# e.g., uuid = { version = "1", features = ["v4"] } for unique IDs

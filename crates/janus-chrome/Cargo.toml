@@ -1,0 +1,35 @@
+[package]
+name = "janus-chrome"
+version = "0.1.0"
+edition = "2024"
+description = "Chrome browser implementation for Janus"
+license = "MIT"
+
+[dependencies]
+janus-core = { path = "../janus-core" }
+actix.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+futures = "0.3"
+chromiumoxide = "0.5"  # Optional: 我们可以使用这个库来处理 CDP 协议
+url.workspace = true
+reqwest = { version = "0.11", features = ["json"] }
+regex = "1.5"
+portpicker = "0.1"  # 用于找到可用端口
+retry = "2.0"       # 用于重试机制
+
+[dev-dependencies]
+env_logger.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "navigation"
+path = "examples/navigation.rs"
