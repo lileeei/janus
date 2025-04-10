@@ -1,0 +1,25 @@
+[package]
+name = "janus-transport"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["websocket"]
+websocket = ["dep:tokio-tungstenite"]
+# Add features for other transports later, e.g., tcp, ipc
+
+[dependencies]
+# Workspace dependencies
+janus-core = { workspace = true, features = [
+    "janus-transport",
+] } # Enable the link back for InternalError::Transport
+tokio = { workspace = true }
+async-trait = { workspace = true }
+actix = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true } # For ConnectParams if needed by transports
+serde_json = { workspace = true } # For errors or potential messages
+
+# Optional dependencies
+tokio-tungstenite = { workspace = true, optional = true }

@@ -1,0 +1,19 @@
+[package]
+name = "janus-protocol-handler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Workspace dependencies
+janus-core = { workspace = true }
+janus-interfaces = { workspace = true } # For errors? Maybe not needed directly.
+janus-transport = { workspace = true }  # For Addr<ConnectionActor> and Messages
+actix = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }            # For timeouts, Duration
+# External
+futures-channel = "0.3" # For one-shot channel for results
+rand = "0.8"            # For potential unique IDs if needed, though sequential is fine

@@ -1,5 +1,5 @@
 [package]
-name = "janus-client"
+name = "janus"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,44 +7,59 @@ edition = "2024"
 
 
 [workspace]
-members = [ 
-    "crates/janus-chrome",
+members = [
+    "crates/janus-interfaces",
     "crates/janus-core",
-    # "crates/janus-interface",  // 将被整合到 janus-core
-    # "crates/janus-transport",  // 将被整合到 janus-core
+    "crates/janus-transport",
+    "crates/janus-protocol-handler", # Keep structure, even if empty for now
+    "crates/janus-browser-chrome",   # Keep structure, even if empty for now
+    "crates/janus-client",           # The actual library crate users depend on
 ]
 resolver = "2"
 
 [workspace.dependencies]
 # Async Runtime & Utilities
 tokio = { version = "1", features = ["full"] }
-futures-util = "0.3"
 async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 # Actor Framework
 actix = "0.13"
 
-# Serialization/Deserialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# Configuration
-config = "0.14"
-toml = "0.8"
+# Logging
+log = "0.4"
+# Choose one logger implementation, e.g., env_logger or tracing-subscriber
+env_logger = "0.11"
+# tracing = "0.1"
+# tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Error Handling
 thiserror = "1.0"
 
-# Logging
-log = "0.4"
-env_logger = "0.11" # Or another logger implementation
+# Configuration
+config = { version = "0.14", features = [
+    "toml",
+    "env",
+] } # Updated version, added "env" feature
 
-# Networking / WebSocket
-tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
-url = "2.5"
+# # WebSocket Transport (Optional)
+# tokio-tungstenite = { version = "0.21", optional = true, features = [
+#     "native-tls",
+#     "rustls-tls-native-roots",
+# ] } # Example TLS features
 
-# Additional Dependencies
-bytes = "1.5"  # For BytesMut in connection codec
+# WebSocket Transport
+tokio-tungstenite = { version = "0.21", features = [
+    "native-tls",
+    "rustls-tls-native-roots",
+] } # Example TLS features
 
-# Add other common dependencies if needed
-# e.g., uuid = { version = "1", features = ["v4"] } for unique IDs
+# Internal Crates (Makes dependency declarations cleaner)
+janus-interfaces = { path = "crates/janus-interfaces" }
+janus-core = { path = "crates/janus-core" }
+janus-transport = { path = "crates/janus-transport" }
+janus-protocol-handler = { path = "crates/janus-protocol-handler" }
+janus-browser-chrome = { path = "crates/janus-browser-chrome" }

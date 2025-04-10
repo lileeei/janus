@@ -4,22 +4,3 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-janus-interface = { path = "../janus-interface" }
-janus-transport = { path = "../janus-transport" }
-
-actix.workspace = true
-tokio.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
-log.workspace = true
-config.workspace = true
-async-trait.workspace = true
-futures-util.workspace = true
-url.workspace = true
-tokio-tungstenite.workspace = true
-bytes.workspace = true
-tokio-util = { version = "0.7", features = ["codec"] }
-
-[dev-dependencies]
-env_logger.workspace = true

@@ -1,0 +1,18 @@
+[package]
+name = "janus-browser-chrome"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Workspace dependencies
+janus-interfaces = { workspace = true }
+janus-core = { workspace = true }
+janus-protocol-handler = { workspace = true } # To interact with Command/Event Actors
+actix = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }                  # For async operations, maybe sleep
+futures-channel = "0.3"                       # For oneshot channels used by SendCommand

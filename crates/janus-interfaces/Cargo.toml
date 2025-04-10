@@ -1,0 +1,23 @@
+[package]
+name = "janus-interfaces"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["websocket"]
+# Enable specific transport configurations if needed
+websocket = []
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }                  # Needed for BrowserLaunchConfig -> BidiSettings
+config = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }  # For Duration
+env_logger = { workspace = true, optional = true }
+# tracing = { workspace = true, optional = true }
+# tracing-subscriber = { workspace = true, optional = true }
+
+# Needs TransportError definition
+janus-transport = { workspace = true, optional = true } # Make optional if TransportError moves here later
