@@ -2,9 +2,6 @@
 name = "janus-client"
 version = "0.1.0"
 edition = "2024"
-description = "Unified client library for browser debugging protocols (CDP, WebDriver BiDi)"
-license = "Apache-2.0"                                                                       # Or your chosen license
-repository = "https://github.com/your-repo/janus-client"                                     # Example
 
 [dependencies]
 # Workspace dependencies
