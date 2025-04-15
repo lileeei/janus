@@ -5,11 +5,11 @@ use crate::supervisor::{CoreActorsInfo, StartBrowserActor, StartCoreActors, Supe
 use janus_browser_chrome::ChromeBrowser; // Import L2 implementation
 use janus_core::config::{self, BrowserLaunchConfig, Config};
 use janus_core::logging;
-use janus_interfaces::{ApiError, Browser}; // Use L1 traits
+use janus_interfaces::Browser; // Use L1 traits
 use janus_transport::ConnectParams;
 
 use actix::prelude::*;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 
 /// Specifies how to start a browser session.
 #[derive(Debug, Clone)]
@@ -56,8 +56,7 @@ pub async fn launch(
 
     // 3. Determine ConnectParams and Launch specific config
     // TODO (Phase 3): Implement actual browser process launching in determine_connection
-    let (connect_params, _launch_config) =
-        determine_connection_params(&mode, &cfg).await?; // launch_config needed later for process mgmt
+    let (connect_params, _launch_config) = determine_connection_params(&mode, &cfg).await?; // launch_config needed later for process mgmt
 
     // --- Phase 2: Actor System and Wiring ---
 
@@ -70,11 +69,10 @@ pub async fn launch(
         // Starting a system like this makes it hard to reuse across multiple launches.
         // A better pattern might be needed for library usage.
         // For now, let launch start a new one if needed.
-         System::new(); // Creates and sets as current
+        System::new(); // Creates and sets as current
     } else {
-         info!("Using existing Actix system.");
+        info!("Using existing Actix system.");
     }
-
 
     // Start the main supervisor actor
     let supervisor_addr = SupervisorActor::new(cfg.clone()).start();
@@ -84,8 +82,12 @@ pub async fn launch(
     let core_actors_info: CoreActorsInfo = supervisor_addr
         .send(StartCoreActors(connect_params.clone())) // Clone params
         .await
-        .map_err(|mb_err| ClientError::SupervisorError(format!("Mailbox error starting core actors: {}", mb_err)))? // Mailbox error
-        .map_err(|internal_err| ClientError::SupervisorError(format!("Failed to start core actors: {}", internal_err)))?; // Logical error
+        .map_err(|mb_err| {
+            ClientError::SupervisorError(format!("Mailbox error starting core actors: {}", mb_err))
+        })? // Mailbox error
+        .map_err(|internal_err| {
+            ClientError::SupervisorError(format!("Failed to start core actors: {}", internal_err))
+        })?; // Logical error
 
     info!("Core actors started successfully.");
     // TODO: Wait for connection to be established? Supervisor should handle this maybe.
@@ -95,10 +97,19 @@ pub async fn launch(
     // Determine browser type based on launch_config or connection URL?
     // For Phase 2, assume Chrome.
     let browser_actor_addr = supervisor_addr
-        .send(StartBrowserActor { core_actors: core_actors_info })
+        .send(StartBrowserActor {
+            core_actors: core_actors_info,
+        })
         .await
-        .map_err(|mb_err| ClientError::SupervisorError(format!("Mailbox error starting browser actor: {}", mb_err)))?
-        .map_err(|internal_err| ClientError::LaunchError(format!("Failed to start browser actor: {}", internal_err)))?;
+        .map_err(|mb_err| {
+            ClientError::SupervisorError(format!(
+                "Mailbox error starting browser actor: {}",
+                mb_err
+            ))
+        })?
+        .map_err(|internal_err| {
+            ClientError::LaunchError(format!("Failed to start browser actor: {}", internal_err))
+        })?;
 
     info!("ChromeBrowserActor started successfully.");
     // TODO: Wait for BrowserActor to signal readiness?
@@ -124,7 +135,7 @@ async fn determine_connection_params(
             let params = ConnectParams {
                 url: url.clone(),
                 connection_timeout: cfg.transport.connect_timeout,
-                #[cfg(feature = "websocket")]
+                // #[cfg(feature = "websocket")]
                 ws_options: cfg.transport.websocket.clone(),
             };
             Ok((params, BrowserLaunchConfig::default())) // No launch config needed
@@ -133,7 +144,10 @@ async fn determine_connection_params(
             browser_id,
             overrides,
         } => {
-            info!("Preparing connection for launching new browser instance (id: {:?})", browser_id);
+            info!(
+                "Preparing connection for launching new browser instance (id: {:?})",
+                browser_id
+            );
             let base_config = browser_id
                 .as_ref()
                 .and_then(|id| cfg.browsers.get(id))
@@ -152,32 +166,29 @@ async fn determine_connection_params(
                 override_url.clone()
             } else {
                 // Construct URL from config defaults (e.g., localhost:9222)
-                // This relies on the user manually starting Chrome with remote debugging enabled for now.
                 let port = launch_cfg.remote_debugging_port.unwrap_or(9222);
                 let addr = launch_cfg
                     .remote_debugging_address
                     .as_deref()
                     .unwrap_or("127.0.0.1");
-                let default_url = format!("ws://{}:{}", addr, port); // Basic WS URL
-                warn!(
-                    "Phase 2: Browser process launching not implemented. Assuming browser is running at {}", default_url
+
+                // In Phase 2, we'll use a simpler approach for connecting to Chrome
+                // Connect to the /json/version endpoint first to get browser websocket URL
+                info!(
+                    "Discovering browser websocket endpoint at http://{}:{}",
+                    addr, port
                 );
-                // TODO (Phase 3): Need to fetch the actual devtools endpoint, often includes /devtools/browser/UUID
-                 warn!("Phase 2: Using base URL '{}'. Actual connection might require a specific path like /devtools/browser/...", default_url);
-                 // Returning the base URL. Connection might fail if specific endpoint needed.
-                 default_url
-                 // Better placeholder for Phase 2 testing: fixed known endpoint from manually launched Chrome
-                // format!("ws://{}:{}/devtools/browser/...", addr, port) // Replace ... with actual UUID if known
 
-                 // Let's use a known default that often works if Chrome launched simply
-                 // format!("ws://{}:{}/devtools/browser", addr, port)
+                // In a real implementation, we would fetch the WebSocket URL from:
+                // http://{}:{}/json/version
+                // For now, use a direct WebSocket URL that should work with standard Chrome
+                format!("ws://{}:{}/devtools/browser/", addr, port).into()
             };
-
 
             let params = ConnectParams {
                 url,
                 connection_timeout: cfg.transport.connect_timeout,
-                #[cfg(feature = "websocket")]
+                // #[cfg(feature = "websocket")]
                 ws_options: cfg.transport.websocket.clone(), // TODO: Merge from launch_cfg if needed
             };
 

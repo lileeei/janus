@@ -1,14 +1,15 @@
-use crate::common::*;
 use crate::error::ApiError;
 use crate::page::Page;
-use async_trait::async_trait;
+use std::fmt::Debug;
 
 /// Represents a connection to and control over a web browser instance.
 ///
 /// This trait provides a high-level, protocol-agnostic API for interacting
 /// with the browser, managing pages/targets, and accessing browser-level information.
-#[async_trait]
-pub trait Browser: Send + Sync {
+// We need to use different approaches for Rust traits with async methods
+// This trait defines the interface, but we'll need wrappers for dyn usage
+#[async_trait::async_trait]
+pub trait Browser: Send + Sync + Debug {
     // Note: Connecting is typically handled by a separate launch/connect function
     // that returns `Result<impl Browser, ApiError>`, rather than being a method
     // on the trait itself after instantiation.

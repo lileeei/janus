@@ -6,8 +6,9 @@ use crate::messages::{
 };
 use actix::prelude::*;
 use janus_core::{error::InternalError, Config};
-use janus_transport::{ConnectionActor, IncomingMessage, SendMessage};
+use janus_transport::{ConnectionActor, ConnectionState, ConnectionStatusUpdate, IncomingMessage, SendMessage};
 use log::{debug, error, info, trace, warn};
+use serde_json::{json, Value};
 use std::{collections::HashMap, time::Duration};
 
 pub struct CommandActor {
@@ -168,7 +169,7 @@ impl Handler<SendCommand> for CommandActor {
                         command_id, transport_err
                     );
                     // Need to inform the original requester and clean up
-                    return Some(Err(InternalError::Transport(transport_err))); // Signal cleanup needed
+                    return Some(Err(InternalError::Transport(transport_err.to_string()))); // Signal cleanup needed
                 }
                 Err(mailbox_err) => {
                     // Failed to send message to ConnectionActor
@@ -272,7 +273,7 @@ impl Handler<ConnectionStatusUpdate> for CommandActor {
             warn!("Connection dropped! Failing all pending commands.");
             for (id, pending) in self.pending_requests.drain() {
                 ctx.cancel_future(pending.timeout_handle);
-                let _ = pending.result_tx.send(Err(InternalError::Transport(err.clone())));
+                let _ = pending.result_tx.send(Err(InternalError::Transport(err.to_string())));
                 debug!("Cancelled pending command id {} due to connection drop.", id);
             }
         }

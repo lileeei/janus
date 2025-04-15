@@ -1,5 +1,5 @@
 use crate::error::CoreError;
-use config::{Config as ConfigLoader, Environment, File, Source};
+use config::{Config as ConfigLoader, Environment, File};
 use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 
@@ -197,7 +197,7 @@ pub fn load_config() -> Result<Config, CoreError> {
         .set_default("global.log_level", "info")?
         .set_default("global.default_command_timeout_ms", 30000u64)?
         .set_default("transport.connect_timeout_ms", 20000u64)?
-        .set_default("actor_system.default_mailbox_capacity", 100usize)?
+        .set_default("actor_system.default_mailbox_capacity", 100i64)?
         // Add other non-Option defaults if any exist
         // Load from `janus.toml` (or other supported extensions) if it exists
         .add_source(File::with_name("janus").required(false))

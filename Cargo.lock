@@ -473,6 +473,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f29059c0c2090612e8d742178b0580d2dc940c837851ad723096f87af6663e"
 
 [[package]]
+name = "futures-macro"
+version = "0.3.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "futures-sink"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -491,6 +502,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81"
 dependencies = [
  "futures-core",
+ "futures-macro",
  "futures-sink",
  "futures-task",
  "pin-project-lite",
@@ -742,6 +754,11 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 [[package]]
 name = "janus"
 version = "0.1.0"
+dependencies = [
+ "janus-client",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "janus-browser-chrome"
@@ -784,6 +801,7 @@ dependencies = [
  "env_logger",
  "log",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror 1.0.69",
 ]
@@ -792,6 +810,7 @@ dependencies = [
 name = "janus-interfaces"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "config",
  "env_logger",
  "janus-transport",
@@ -825,6 +844,7 @@ version = "0.1.0"
 dependencies = [
  "actix",
  "async-trait",
+ "futures-util",
  "janus-core",
  "log",
  "serde",

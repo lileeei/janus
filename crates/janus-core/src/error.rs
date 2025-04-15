@@ -1,26 +1,12 @@
 use thiserror::Error;
 
-// Decide where TransportError lives. Let's assume janus-transport for now.
-// If janus-transport is optional, we might need conditional compilation here,
-// or define a generic transport error variant.
-#[cfg(feature = "janus-transport")]
-use janus_transport::error::TransportError;
-
 /// Represents errors originating from within the Janus client's internal logic,
 /// distinct from the high-level `ApiError` exposed to users.
 #[derive(Error, Debug)]
 pub enum InternalError {
     /// An error occurred in the transport layer (e.g., WebSocket, TCP).
-    // This assumes TransportError is defined elsewhere (e.g., janus-transport)
-    // and janus-transport feature is enabled.
-    #[cfg(feature = "janus-transport")]
     #[error("Transport error: {0}")]
-    Transport(#[from] TransportError),
-
-    // If janus-transport is optional and disabled, provide a placeholder
-    #[cfg(not(feature = "janus-transport"))]
-    #[error("Transport error: {0}")]
-    Transport(String),
+    Transport(String), // Transport error represented as a String
 
     /// An error related to the browser's debugging protocol itself.
     /// This often wraps specific protocol error details.
@@ -74,15 +60,7 @@ pub enum CoreError {
     LoggingSetup(String),
 }
 
-// Conversion from CoreError to InternalError
-impl From<CoreError> for InternalError {
-    fn from(err: CoreError) -> Self {
-        match err {
-            CoreError::ConfigLoad(e) => InternalError::Configuration(e.to_string()),
-            CoreError::LoggingSetup(e) => InternalError::Core(CoreError::LoggingSetup(e)),
-        }
-    }
-}
+// Conversion from CoreError to InternalError is handled by derive(Error)
 
 // Allow easy conversion from serde_json errors
 impl From<serde_json::Error> for InternalError {

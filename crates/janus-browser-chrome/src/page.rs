@@ -11,6 +11,7 @@ use log::debug;
 
 
 // Represents a handle to a specific Chrome page/target
+#[derive(Debug)]
 pub struct ChromePage {
     pub(crate) actor_addr: Addr<ChromePageActor>,
     page_id: String, // Store the ID for the id() method

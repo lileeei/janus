@@ -10,16 +10,16 @@ websocket = ["dep:tokio-tungstenite"]
 
 [dependencies]
 # Workspace dependencies
-janus-core = { workspace = true, features = [
-    "janus-transport",
-] } # Enable the link back for InternalError::Transport
+janus-core = { workspace = true }  # Enable the link back for InternalError::Transport
 tokio = { workspace = true }
 async-trait = { workspace = true }
 actix = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
-serde = { workspace = true } # For ConnectParams if needed by transports
-serde_json = { workspace = true } # For errors or potential messages
+serde = { workspace = true }       # For ConnectParams if needed by transports
+serde_json = { workspace = true }  # For errors or potential messages
 
 # Optional dependencies
 tokio-tungstenite = { workspace = true, optional = true }
+
+futures-util = "0.3.31"

@@ -3,7 +3,6 @@
 use actix::prelude::*;
 use futures_channel::oneshot;
 use janus_core::error::InternalError;
-use serde::Deserialize;
 use serde_json::Value;
 
 /// Request sent from L2 actors (Browser/Page) to CommandActor to execute a protocol command.
@@ -102,6 +101,7 @@ pub struct JsonRpcResponse {
 
 /// Structure for the JSON-RPC error object within a response.
 #[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct JsonRpcError {
     pub code: i64,
     pub message: String,
@@ -110,7 +110,7 @@ pub struct JsonRpcError {
 }
 
 /// Structure for incoming JSON messages (can be response or event).
-#[derive(Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 pub struct IncomingJson {
     // If 'id' is present, it's a response.
     pub id: Option<i64>,

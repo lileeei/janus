@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 /// Errors specific to the transport layer (L3).
-#[derive(Error, Debug, Clone)] // Clone might be useful if error needs to be stored/passed
+#[derive(Error, Debug, Clone, PartialEq)] // Clone might be useful if error needs to be stored/passed
 pub enum TransportError {
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
@@ -75,9 +75,9 @@ impl From<tokio_tungstenite::tungstenite::Error> for TransportError {
             tokio_tungstenite::tungstenite::Error::Protocol(reason) => {
                 TransportError::WebSocketError(format!("Protocol violation: {}", reason))
             }
-            tokio_tungstenite::tungstenite::Error::SendQueueFull => {
-                TransportError::SendFailed("Send queue full".into())
-            }
+            // tokio_tungstenite::tungstenite::Error::SendQueueFull => {
+            //     TransportError::SendFailed("Send queue full".into())
+            // }
             tokio_tungstenite::tungstenite::Error::Utf8 => {
                 TransportError::ReceiveFailed("Invalid UTF-8 received".into())
             }

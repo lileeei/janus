@@ -4,8 +4,6 @@
 //! internal error definitions, and potentially base actor functionalities
 //! used by other Janus crates.
 
-use crate::error::CoreError;
-
 pub mod config;
 pub mod error;
 pub mod logging; // Optional logging setup helper

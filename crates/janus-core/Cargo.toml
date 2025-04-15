@@ -6,14 +6,13 @@ edition = "2024"
 [features]
 # Enable WebSocket related configurations
 websocket = []
-# Enable integration with janus-transport
-janus-transport = []
 # Enable env_logger based logging initialization
 env_logger = ["dep:env_logger"]
 
 [dependencies]
 # Core dependencies
 serde = { workspace = true }
+serde_json = { workspace = true }
 config = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }

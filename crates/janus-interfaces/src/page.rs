@@ -2,13 +2,14 @@ use crate::common::*;
 use crate::error::ApiError;
 use async_trait::async_trait;
 use serde_json::Value;
+use std::fmt::Debug;
 
 /// Represents a single browser page, tab, or other target (like a WebWorker).
 ///
 /// This trait provides a high-level, protocol-agnostic API for interacting
 /// with the content and state of a specific target.
-#[async_trait]
-pub trait Page: Send + Sync {
+#[async_trait::async_trait]
+pub trait Page: Send + Sync + Debug {
     /// Navigates the page to the specified URL.
     ///
     /// # Arguments

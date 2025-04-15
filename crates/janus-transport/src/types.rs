@@ -9,7 +9,7 @@ pub struct ConnectParams {
     pub url: String,
 
     /// Connection timeout. Applied during the initial connection attempt.
-    #[serde(with = "crate::serde_duration_ms", default = "default_connect_timeout")]
+    #[serde(with = "serde_duration_ms", default = "default_connect_timeout")]
     pub connection_timeout: Duration,
 
     /// Options specific to WebSocket connections.

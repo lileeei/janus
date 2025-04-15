@@ -22,6 +22,9 @@ pub use janus_interfaces::{
     SubscriptionId,
 };
 
+// Export value for JSON parsing/serialization
+pub use serde_json::Value;
+
 // Re-export core types if needed by users (e.g. Config for advanced setup)
 pub use janus_core::Config; // Make Config accessible
 
@@ -53,7 +56,7 @@ mod tests {
         let _params: ConnectParams = ConnectParams {
             url: String::new(),
             connection_timeout: std::time::Duration::from_secs(1),
-            #[cfg(feature = "websocket")]
+            // #[cfg(feature = "websocket")]
             ws_options: WebSocketConnectOptions::default(),
         };
         // Cannot instantiate traits directly

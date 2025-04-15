@@ -17,6 +17,15 @@ members = [
 ]
 resolver = "2"
 
+[workspace.package]
+edition = "2024"
+
+# Setting dependencies for examples
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+janus-client = { path = "crates/janus-client" }
+serde_json = { workspace = true }
+
 [workspace.dependencies]
 # Async Runtime & Utilities
 tokio = { version = "1", features = ["full"] }

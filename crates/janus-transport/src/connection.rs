@@ -1,12 +1,12 @@
+// janus/crates/janus-transport/src/connection.rs
 use crate::error::TransportError;
+use crate::factory::create_transport;
 use crate::traits::Transport;
 use crate::types::ConnectParams;
-use crate::factory::create_transport;
 use actix::prelude::*;
-use log::{debug, error, info, warn};
-use std::time::Duration;
+use log::{error, info, trace, warn}; // Add trace back
+// Removed unused import: use std::time::Duration;
 use tokio::sync::mpsc;
-
 
 /// Actor responsible for managing a single underlying transport connection.
 ///
@@ -44,8 +44,14 @@ impl ConnectionActor {
 
     /// Helper to initiate the connection process.
     fn start_connection_task(&mut self, ctx: &mut Context<Self>) {
-        if self.connection_task.is_some() || self.state == ConnectionState::Connecting || self.state == ConnectionState::Connected {
-            warn!("Connection task already running or actor in active state ({:?}). Ignoring start request.", self.state);
+        if self.connection_task.is_some()
+            || self.state == ConnectionState::Connecting
+            || self.state == ConnectionState::Connected
+        {
+            warn!(
+                "Connection task already running or actor in active state ({:?}). Ignoring start request.",
+                self.state
+            );
             return;
         }
 
@@ -58,160 +64,135 @@ impl ConnectionActor {
 
         let addr = ctx.address();
         let message_handler = self.message_handler.clone();
-        let supervisor_recipient = self.supervisor.clone();
         let connect_timeout = self.params.connection_timeout;
 
         // Channel for sending messages to the transport write task
         let (outgoing_tx, mut outgoing_rx) = mpsc::channel::<String>(100); // Configurable buffer size?
         self.outgoing_tx = Some(outgoing_tx);
 
-
+        // Define the async block. This will be wrapped later.
         let connection_fut = async move {
-             let transport_builder = match transport_builder_result {
+            let transport_builder = match transport_builder_result {
                 Ok(builder) => builder,
                 Err(e) => {
-                    error!("Failed to create transport for {}: {}", addr.connected(), e);
-                    // Use do_send to update state asynchronously from within the future
+                    error!("Failed to create transport for Addr({:?}): {}", addr, e);
                     addr.do_send(TransportEvent::FailedToStart(e));
-                    return;
+                    return; // Exit async block
                 }
             };
 
             info!("Attempting to connect transport...");
             // Wrap connect attempt in a timeout
-            match tokio::time::timeout(connect_timeout, connect_internal(transport_builder)).await {
+            match tokio::time::timeout(connect_timeout, Self::connect_internal(transport_builder))
+                .await
+            {
                 Ok(Ok(mut transport)) => {
                     info!("Transport connected successfully.");
                     addr.do_send(TransportEvent::Connected);
 
-                    // Read loop
-                    let read_task = async {
-                        loop {
-                            tokio::select! {
-                                biased; // Prioritize checking channel closure
-                                _ = addr.closed() => {
-                                    info!("ConnectionActor address closed, shutting down read task.");
+                    // === Combined Read/Write Loop ===
+                    loop {
+                        tokio::select! {
+                            biased; // Prioritize outgoing messages? Or reads? Default is random.
+
+                            // Handle outgoing messages
+                            maybe_msg_to_send = outgoing_rx.recv() => {
+                                if let Some(msg_to_send) = maybe_msg_to_send {
+                                    trace!("Sending message: {}", msg_to_send);
+                                    if let Err(e) = transport.send(&msg_to_send).await {
+                                        error!("Transport send error: {}. Disconnecting.", e);
+                                        addr.do_send(TransportEvent::Disconnected(Some(e)));
+                                        break; // Exit loop on send error
+                                    }
+                                } else {
+                                    info!("Outgoing message channel closed, ending connection loop.");
+                                    // Don't signal error, just stop sending and let reads continue until closed.
+                                    // Or signal graceful disconnect? Let's signal disconnect.
+                                    addr.do_send(TransportEvent::Disconnected(None)); // Consider this graceful from our end
                                     break;
                                 }
-                                msg_result = transport.receive() => {
-                                     match msg_result {
-                                        Some(Ok(msg)) => {
-                                            debug!("Received message: {}", msg); // Reduce log level
-                                            if message_handler.do_send(IncomingMessage(msg)).is_err() {
-                                                error!("Message handler recipient disconnected. Stopping read task.");
-                                                addr.do_send(TransportEvent::Disconnected(Some(TransportError::Other("Message handler disconnected".into()))));
-                                                break;
-                                            }
+                            },
+
+                            // Handle incoming messages
+                            receive_result = transport.receive() => {
+                                match receive_result {
+                                    Some(Ok(msg)) => {
+                                        trace!("Received message: {}", msg);
+                                        if message_handler.try_send(IncomingMessage(msg)).is_err() {
+                                             error!("Message handler recipient disconnected or mailbox full. Disconnecting.");
+                                             addr.do_send(TransportEvent::Disconnected(Some(TransportError::Other("Message handler disconnected".into()))));
+                                             break; // Exit loop
                                         }
-                                        Some(Err(e)) => {
-                                            error!("Transport receive error: {}", e);
-                                            addr.do_send(TransportEvent::Disconnected(Some(e)));
-                                            break; // Exit read loop on error
-                                        }
-                                        None => {
-                                            info!("Transport connection closed gracefully by remote.");
-                                            addr.do_send(TransportEvent::Disconnected(None)); // None indicates graceful close
-                                            break; // Exit loop on graceful close
-                                        }
+                                    }
+                                    Some(Err(e)) => {
+                                        error!("Transport receive error: {}. Disconnecting.", e);
+                                        addr.do_send(TransportEvent::Disconnected(Some(e)));
+                                        break; // Exit loop on receive error
+                                    }
+                                    None => {
+                                        info!("Transport connection closed gracefully by remote.");
+                                        addr.do_send(TransportEvent::Disconnected(None));
+                                        break; // Exit loop on graceful close
                                     }
                                 }
                             }
                         }
-                         info!("Transport read loop finished.");
-                    };
-
-                    // Write loop
-                    let write_task = async {
-                        loop {
-                             tokio::select! {
-                                biased;
-                                _ = addr.closed() => {
-                                    info!("ConnectionActor address closed, shutting down write task.");
-                                    break;
-                                }
-                                maybe_msg_to_send = outgoing_rx.recv() => {
-                                    if let Some(msg_to_send) = maybe_msg_to_send {
-                                        debug!("Sending message: {}", msg_to_send); // Reduce log level
-                                         if let Err(e) = transport.send(&msg_to_send).await {
-                                            error!("Transport send error: {}", e);
-                                            // Don't necessarily break the write loop, but report error maybe?
-                                            // If send fails critically, the read side will likely detect disconnection.
-                                            // Or signal disconnection directly:
-                                            addr.do_send(TransportEvent::Disconnected(Some(e)));
-                                            break; // Exit write loop on critical send error
-                                         }
-                                    } else {
-                                        info!("Outgoing message channel closed, ending write task.");
-                                        break; // Channel closed, exit loop
-                                    }
-                                }
-                            }
-                        }
-                        info!("Transport write loop finished.");
-                        // Ensure transport disconnect is called when write loop ends (gracefully or on error)
-                        if let Err(e) = transport.disconnect().await {
-                            warn!("Error during transport disconnect: {}", e);
-                        }
-                    };
-
-                    // Run both tasks concurrently until one finishes (which should signal disconnection)
-                    tokio::select! {
-                        _ = read_task => { info!("Read task completed."); },
-                        _ = write_task => { info!("Write task completed."); },
-                         _ = addr.closed() => {
-                             info!("ConnectionActor address closed, terminating connection task.");
-                         }
                     }
-
-                },
-                Ok(Err(e)) => { // connect_internal returned an error
+                    // Loop exited, try to disconnect transport gracefully if not already done
+                    if let Err(e) = transport.disconnect().await {
+                         warn!("Error during transport disconnect after loop exit: {}", e);
+                    }
+                }
+                Ok(Err(e)) => {
                     error!("Transport connect internal error: {}", e);
                     addr.do_send(TransportEvent::Disconnected(Some(e)));
                 }
-                Err(_) => { // Timeout occurred
-                     error!("Transport connection timed out after {:?}", connect_timeout);
-                     addr.do_send(TransportEvent::Disconnected(Some(TransportError::Timeout)));
-                 }
+                Err(_) => {
+                    error!("Transport connection timed out after {:?}", connect_timeout);
+                    addr.do_send(TransportEvent::Disconnected(Some(TransportError::Timeout)));
+                }
             }
             info!("Connection task finished.");
-        };
+        }; // End of async block definition
 
-        // Spawn the connection logic
-        self.connection_task = Some(ctx.spawn(connection_fut));
+        // Spawn the connection logic, wrapping it with `.into_actor(self)`
+        // This ensures the future implements ActorFuture<Self>
+        self.connection_task = Some(ctx.spawn(connection_fut.into_actor(self)));
     }
 
-
     fn notify_supervisor(&self, state: ConnectionState) {
-        if self.supervisor.do_send(ConnectionStatusUpdate(state)).is_err() {
-            warn!("Failed to send status update to supervisor. It might have stopped.");
+        // Use try_send, don't check .is_err() on the result. Log if it fails.
+        if self
+            .supervisor
+            .try_send(ConnectionStatusUpdate(state))
+            .is_err()
+        {
+            warn!("Failed to send status update to supervisor (mailbox full or recipient gone).");
         }
     }
 
     fn stop_connection_task(&mut self) {
-        if let Some(handle) = self.connection_task.take() {
-            info!("Aborting connection task.");
-            // Abort the task handle
-            // Note: Requires specific actor framework support or manual tracking.
-            // In actix, ctx.cancel_future(handle) is used.
-            // For raw tokio tasks spawned in ctx.spawn, there isn't direct cancellation.
-            // Rely on checking addr.closed() within the loop and closing the outgoing_tx.
-            // Or store the JoinHandle if using tokio::spawn directly and call abort().
-             warn!("Explicit task cancellation not directly implemented here, relying on actor stopping / channel closing.");
+        if let Some(_handle) = self.connection_task.take() {
+            // Prefix with underscore as it's not used
+            info!("Stopping connection task future via context.");
+            // Actix automatically cancels futures spawned with ctx.spawn when the actor stops.
+            // If using ctx.spawn directly: ctx.cancel_future(handle);
         }
-         // Close the outgoing channel to signal the write task to stop gracefully
+        // Close the outgoing channel to signal the write task to stop gracefully
         if let Some(tx) = self.outgoing_tx.take() {
-             drop(tx); // Dropping sender closes the channel
-             info!("Outgoing message channel closed.");
+            drop(tx); // Dropping sender closes the channel
+            info!("Outgoing message channel closed.");
         }
     }
-}
 
-// Internal helper to isolate the transport.connect() call
-async fn connect_internal(mut transport: Box<dyn Transport>) -> Result<Box<dyn Transport>, TransportError> {
-    transport.connect().await?;
-    Ok(transport)
+    // Associated function, not a method
+    async fn connect_internal(
+        mut transport: Box<dyn Transport>,
+    ) -> Result<Box<dyn Transport>, TransportError> {
+        transport.connect().await?;
+        Ok(transport)
+    }
 }
-
 
 /// Represents the lifecycle state of the connection managed by `ConnectionActor`.
 #[derive(Debug, Clone, PartialEq)]
@@ -221,7 +202,7 @@ pub enum ConnectionState {
     Connected,
     Disconnecting,
     Disconnected(Option<TransportError>), // Some(err) for error, None for graceful close
-    FailedToStart(TransportError), // Initial creation/startup failure
+    FailedToStart(TransportError),        // Initial creation/startup failure
 }
 
 // --- Actor Messages ---
@@ -250,7 +231,6 @@ enum TransportEvent {
 #[rtype(result = "()")]
 pub struct ConnectionStatusUpdate(pub ConnectionState);
 
-
 // --- Actor Implementation ---
 
 impl Actor for ConnectionActor {
@@ -267,15 +247,17 @@ impl Actor for ConnectionActor {
         self.stop_connection_task(); // Ensure task and channel are cleaned up
 
         // Update state if not already disconnected/failed
-        if !matches!(self.state, ConnectionState::Disconnected(_) | ConnectionState::FailedToStart(_)) {
-             self.state = ConnectionState::Disconnecting;
-             info!("ConnectionActor state -> Disconnecting");
-             self.notify_supervisor(self.state.clone());
+        if !matches!(
+            self.state,
+            ConnectionState::Disconnected(_) | ConnectionState::FailedToStart(_)
+        ) {
+            self.state = ConnectionState::Disconnecting;
+            info!("ConnectionActor state -> Disconnecting");
+            self.notify_supervisor(self.state.clone());
         }
         Running::Stop
     }
 }
-
 
 // --- Message Handlers ---
 
@@ -291,11 +273,14 @@ impl Handler<TransportEvent> for ConnectionActor {
         };
 
         if self.state == new_state {
-            debug!("Ignoring redundant state update: {:?}", new_state);
-            return; // Avoid redundant updates
+            trace!("Ignoring redundant state update: {:?}", new_state);
+            return;
         }
 
-        info!("Connection state changing from {:?} -> {:?}", self.state, new_state);
+        info!(
+            "Connection state changing from {:?} -> {:?}",
+            self.state, new_state
+        );
         self.state = new_state.clone();
 
         // Notify supervisor about the state change
@@ -309,14 +294,12 @@ impl Handler<TransportEvent> for ConnectionActor {
                 ctx.stop();
             }
             ConnectionState::Connected => {
-                 info!("ConnectionActor reached Connected state.");
-                 // Connection is up, ready for messages.
-             }
-             _ => {} // Connecting, Disconnecting, Idle handled elsewhere
+                info!("ConnectionActor reached Connected state.");
+            }
+            _ => {} // Connecting, Disconnecting, Idle handled elsewhere
         }
     }
 }
-
 
 // Handler for sending messages *out* through the connection
 impl Handler<SendMessage> for ConnectionActor {
@@ -324,28 +307,43 @@ impl Handler<SendMessage> for ConnectionActor {
     type Result = ResponseFuture<Result<(), TransportError>>;
 
     fn handle(&mut self, msg: SendMessage, _ctx: &mut Context<Self>) -> Self::Result {
-         let current_state = self.state.clone(); // Clone state for async block
-         let maybe_tx = self.outgoing_tx.clone(); // Clone sender handle
+        let current_state = self.state.clone(); // Clone state for async block
+        let maybe_tx = self.outgoing_tx.clone(); // Clone sender handle
 
         Box::pin(async move {
             match current_state {
                 ConnectionState::Connected => {
                     if let Some(tx) = maybe_tx {
                         // Send to the mpsc channel consumed by the write task
-                        if tx.send(msg.0).await.is_ok() {
-                            Ok(())
-                        } else {
-                            error!("Outgoing message channel closed unexpectedly while connected.");
-                            Err(TransportError::NotConnected("Message channel closed".into()))
+                        match tx.send(msg.0).await {
+                            // Use await for blocking send
+                            Ok(_) => Ok(()),
+                            Err(send_error) => {
+                                error!("Outgoing message channel send error: {}", send_error);
+                                Err(TransportError::SendFailed(format!(
+                                    "Message channel send error: {}", // More specific error
+                                    send_error
+                                )))
+                            }
                         }
                     } else {
-                         error!("Attempted to send message but outgoing channel is missing (state: Connected).");
-                         Err(TransportError::NotConnected("Internal channel missing".into()))
+                        error!(
+                            "Attempted to send message but outgoing channel is missing (state: Connected)."
+                        );
+                        Err(TransportError::NotConnected(
+                            "Internal channel missing".into(),
+                        ))
                     }
-                },
+                }
                 _ => {
-                    warn!("Attempted to send message while not connected (State: {:?})", current_state);
-                    Err(TransportError::NotConnected(format!("Current state: {:?}", current_state)))
+                    warn!(
+                        "Attempted to send message while not connected (State: {:?})",
+                        current_state
+                    );
+                    Err(TransportError::NotConnected(format!(
+                        "Current state: {:?}",
+                        current_state
+                    )))
                 }
             }
         })
