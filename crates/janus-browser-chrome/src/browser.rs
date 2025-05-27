@@ -40,10 +40,12 @@ impl Browser for ChromeBrowser {
         Ok(())
     }
 
+    /// Closes the Chrome browser instance.
+    ///
+    /// This method sends a `ShutdownBrowser` message to the `ChromeBrowserActor`.
+    /// The actor, in turn, sends the `Browser.close` CDP command to the Chrome browser process,
+    /// instructing it to terminate. It also handles the shutdown of the associated actor system components.
     async fn close(&mut self) -> Result<(), ApiError> {
-        // Close should terminate the browser process.
-        // BrowserActor should handle sending Browser.close or Target.closeTarget commands.
-        // For now, it just stops the actor system part.
         debug!("ChromeBrowser::close requested. Sending ShutdownBrowser to BrowserActor.");
         self.actor_addr
             .send(ShutdownBrowser)
@@ -51,7 +53,6 @@ impl Browser for ChromeBrowser {
             .map_err(|mb_err| {
                 ApiError::InternalError(format!("Mailbox error closing browser: {}", mb_err))
             })?;
-        // TODO (Phase 3): Ensure Browser.close is actually sent.
         Ok(())
     }
 
@@ -98,6 +99,27 @@ impl Browser for ChromeBrowser {
             .await
             .map_err(|mb_err| {
                 ApiError::InternalError(format!("Mailbox error getting version: {}", mb_err))
+            })?
+            .map_err(map_internal_to_api_error)
+    }
+
+    /// Resets all browser permissions for the Chrome browser instance.
+    ///
+    /// This method sends a `ResetPermissions` message, including the optional `browser_context_id`,
+    /// to the `ChromeBrowserActor`. The actor then dispatches the `Browser.resetPermissions`
+    /// CDP command to the Chrome browser.
+    ///
+    /// # Arguments
+    /// - `browser_context_id`: An optional `String`. If provided, permissions are reset
+    ///                         only for the specified browser context (e.g., profile).
+    ///                         If `None`, permissions are reset globally for the browser.
+    async fn reset_permissions(&mut self, browser_context_id: Option<String>) -> Result<(), ApiError> {
+        debug!("ChromeBrowser::reset_permissions requested (context_id: {:?}).", browser_context_id);
+        self.actor_addr
+            .send(crate::actors::ResetPermissions { browser_context_id })
+            .await
+            .map_err(|mb_err| {
+                ApiError::InternalError(format!("Mailbox error resetting permissions: {}", mb_err))
             })?
             .map_err(map_internal_to_api_error)
     }

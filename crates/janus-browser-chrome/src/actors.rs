@@ -34,6 +34,12 @@ pub struct GetPages;
 #[rtype(result = "()")] // Just ack stopping process begins
 pub struct ShutdownBrowser;
 
+#[derive(Message, Debug)]
+#[rtype(result = "Result<(), InternalError>")]
+pub struct ResetPermissions {
+    pub browser_context_id: Option<String>,
+}
+
 
 // Response from CreatePage
 #[derive(Debug)]
@@ -447,12 +453,99 @@ impl Handler<GetPages> for ChromeBrowserActor {
      }
  }
 
+impl Handler<ResetPermissions> for ChromeBrowserActor {
+    type Result = ResponseFuture<Result<(), InternalError>>;
+
+    fn handle(&mut self, msg: ResetPermissions, _ctx: &mut Context<Self>) -> Self::Result {
+        info!(
+            "ChromeBrowserActor handling ResetPermissions request (context_id: {:?})",
+            msg.browser_context_id
+        );
+
+        let params = ResetPermissionsParams {
+            browser_context_id: msg.browser_context_id,
+        };
+        
+        // The `send_command` method is already part of `ChromeBrowserActor`
+        // and handles serialization and the actual command sending.
+        let future = self.send_command(
+            None, // Browser-level command, no specific session_id
+            "Browser.resetPermissions".to_string(),
+            // `send_command` expects `Value`, so serialize `params` here.
+            match serde_json::to_value(params) {
+                Ok(serialized_params) => serialized_params,
+                Err(e) => {
+                    // If serialization fails, return an error immediately.
+                    // This needs to be done within a pinned box future.
+                    return Box::pin(async move {
+                        Err(InternalError::Serialization(e.to_string()))
+                    });
+                }
+            }
+        );
+
+        Box::pin(async move {
+            // Await the result of sending the command.
+            // `send_command` returns `Result<Value, InternalError>`.
+            // The `Value` is the successful JSON response from CDP.
+            // For `Browser.resetPermissions`, the CDP response is an empty object on success.
+            match future.await {
+                Ok(_) => Ok(()), // If Ok(Value), it means success, map to Ok(())
+                Err(e) => Err(e), // Propagate any InternalError from send_command
+            }
+        })
+    }
+}
+
 impl Handler<ShutdownBrowser> for ChromeBrowserActor {
-     type Result = ();
+     type Result = ResponseFuture<()>; // Changed to ResponseFuture
      fn handle(&mut self, _msg: ShutdownBrowser, ctx: &mut Context<Self>) -> Self::Result {
-         info!("ShutdownBrowser message received. Stopping actor and pages.");
-         // TODO: Send Browser.close command?
-         ctx.stop();
+         info!("ShutdownBrowser message received. Attempting to close browser via CDP and stop actor.");
+         self.state = BrowserActorState::Closing; // Set state to Closing
+
+         let command_actor = self.command_actor.clone();
+         let self_addr = ctx.address();
+
+         Box::pin(async move {
+             // Send Browser.close command
+             // Helper 'send_command' is part of ChromeBrowserActor, need to call it carefully
+             // Create a temporary oneshot channel to get the result of send_command
+             let (tx_oneshot, rx_oneshot) = oneshot::channel();
+             let cmd_to_send = SendCommand {
+                 session_id: None, // Browser-level command
+                 method: "Browser.close".to_string(),
+                 params: serde_json::Value::Null, // No params for Browser.close
+                 result_tx: tx_oneshot,
+             };
+
+             if let Err(e) = command_actor.send(cmd_to_send).await {
+                 error!("Mailbox error sending Browser.close command: {}", e);
+                 // Even if sending fails, proceed to stop the actor system locally
+             } else {
+                 // Wait for the command to be processed by CommandActor and result sent back
+                 match rx_oneshot.await {
+                     Ok(Ok(_)) => {
+                         info!("Browser.close command sent successfully to Chrome.");
+                     }
+                     Ok(Err(e)) => {
+                         error!("Browser.close command failed: {}", e);
+                     }
+                     Err(_) => {
+                         error!("Browser.close command result channel cancelled.");
+                     }
+                 }
+             }
+
+             // Stop all managed page actors
+             // This part needs to be done by the actor itself, not from the future
+             // So we send a message back to the actor to do this, or do it before spawning this future.
+             // For simplicity here, we'll assume stopping the actor context will handle this,
+             // or that pages are closed via Target.detachedFromTarget / Target.targetDestroyed.
+             // The existing stopping() method already iterates and closes page_actors.
+
+             info!("Proceeding to stop ChromeBrowserActor.");
+             self_addr.stop(); // Stop the actor itself
+         })
      }
 }
 

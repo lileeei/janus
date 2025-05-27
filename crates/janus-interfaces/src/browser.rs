@@ -22,12 +22,13 @@ pub trait Browser: Send + Sync + Debug {
     /// - `Err(ApiError)` if disconnection fails or was not connected.
     async fn disconnect(&mut self) -> Result<(), ApiError>;
 
-    /// Closes the browser instance, terminating the browser process.
-    /// This implicitly disconnects the client.
+    /// Closes the browser instance by sending the appropriate command (e.g., `Browser.close` via CDP)
+    /// to the browser, which should terminate the browser process.
+    /// This implicitly disconnects the client if the browser closes successfully.
     ///
     /// # Returns
-    /// - `Ok(())` on successful closure.
-    /// - `Err(ApiError)` if closing fails (e.g., process not running, permissions).
+    /// - `Ok(())` on successful initiation of the close command and local actor shutdown.
+    /// - `Err(ApiError)` if sending the close command fails or the local actor system encounters an error.
     async fn close(&mut self) -> Result<(), ApiError>;
 
     /// Creates a new browser tab or page (target).
@@ -50,6 +51,23 @@ pub trait Browser: Send + Sync + Debug {
     /// - `Ok(String)` containing browser version details (format may vary).
     /// - `Err(ApiError)` if fetching version information fails.
     async fn version(&self) -> Result<String, ApiError>;
+
+    /// Resets all browser permissions, either for the entire browser or for a specific
+    /// browser context (if supported by the underlying protocol).
+    ///
+    /// This function attempts to send a command like `Browser.resetPermissions` via CDP.
+    ///
+    /// # Arguments
+    /// - `browser_context_id`: An optional `String` identifying a specific browser context
+    ///                         (e.g., a profile or incognito session). If `None`, permissions
+    ///                         are reset globally for the browser. The interpretation of this ID
+    ///                         is protocol-specific.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the command to reset permissions was successfully sent and acknowledged.
+    /// - `Err(ApiError)` if sending the command fails, the browser indicates an error,
+    ///   or other issues occur (e.g., serialization, actor communication).
+    async fn reset_permissions(&mut self, browser_context_id: Option<String>) -> Result<(), ApiError>;
 
     // --- Event Subscription (Placeholder - Requires careful design) ---
     // Event subscription APIs might return stream handles or require callbacks.

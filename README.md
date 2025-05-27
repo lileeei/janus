@@ -84,8 +84,10 @@ async fn main() -> Result<(), ApiError> {
     println!("Heading: {}", heading);
     
     // Cleanup
-    page.close().await?;
-    browser.disconnect().await?;
+    // Closing the page first (optional, as browser.close() might handle this)
+    page.close().await?; 
+    // Close the browser (which also terminates the process and disconnects)
+    browser.close().await?;
     
     Ok(())
 }
@@ -93,7 +95,16 @@ async fn main() -> Result<(), ApiError> {
 
 ## Project Status
 
-Janus is currently a work in progress with basic Chrome support. The project aims to add:
+Janus is currently a work in progress with basic Chrome support. Key functionalities include:
+- Connecting to a running Chrome instance.
+- Creating new pages (tabs).
+- Navigating pages to URLs.
+- Evaluating JavaScript on pages.
+- Getting page titles.
+- Closing the browser instance (terminating the process).
+- Resetting browser permissions (e.g., for specific contexts).
+
+The project aims to add:
 
 - Firefox support via WebDriver BiDi
 - Browser process launching

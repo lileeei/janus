@@ -48,6 +48,14 @@ pub struct SetDiscoverTargetsParams {
     pub discover: bool,
 }
 
+// Browser.resetPermissions command parameters
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetPermissionsParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub browser_context_id: Option<String>,
+}
+
 // --- Results ---
 
 // Example: Target.createTarget result
